@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Job Application Assistant — Flow Demo</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --border: #e2e5ea; --text: #1c1f26;
+    --muted: #6b7280; --accent: #4f46e5; --accent-text: #ffffff;
+    --ok: #059669; --err: #dc2626; --disabled: #cbd5e1;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 32px; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--muted); margin: 0 0 24px; font-size: 14px; }
+  .flow { display: flex; flex-direction: column; gap: 16px; max-width: 720px; margin: 0 auto; }
+  .step {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 18px 20px; opacity: 0.45; transition: opacity 0.2s;
+  }
+  .step.active { opacity: 1; }
+  .step-title { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 15px; margin-bottom: 12px; }
+  .badge {
+    width: 22px; height: 22px; border-radius: 50%; background: var(--disabled); color: white;
+    display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0;
+  }
+  .step.active .badge { background: var(--accent); }
+  .step.done .badge { background: var(--ok); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  input, select {
+    flex: 1; min-width: 200px; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px;
+  }
+  button {
+    padding: 8px 14px; border: none; border-radius: 6px; background: var(--accent);
+    color: var(--accent-text); font-size: 13px; cursor: pointer; font-weight: 500;
+  }
+  button:disabled { background: var(--disabled); cursor: not-allowed; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  .result { margin-top: 10px; font-size: 13px; }
+  .result pre {
+    background: #f1f2f6; padding: 10px; border-radius: 6px; overflow-x: auto; font-size: 12px;
+    max-height: 260px; overflow-y: auto;
+  }
+  .msg-ok { color: var(--ok); }
+  .msg-err { color: var(--err); }
+  .diff-item { border-left: 3px solid var(--accent); padding: 6px 10px; margin: 6px 0; background: #f8f8fc; }
+  .diff-before { color: var(--err); text-decoration: line-through; opacity: 0.7; }
+  .diff-after { color: var(--ok); }
+  .log {
+    max-width: 720px; margin: 24px auto 0; font-size: 11px; color: var(--muted);
+    background: #11131a; color: #9aa4b2; border-radius: 8px; padding: 12px 16px; max-height: 200px; overflow-y: auto;
+  }
+  .log div { white-space: pre-wrap; word-break: break-all; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+  <h1>Job Application Assistant</h1>
+  <p class="subtitle">Minimal demo UI — walks through the real backend flow: sign up → check plan → upload a master resume → add a job posting → tailor it.</p>
+
+  <div class="flow">
+
+    <div class="step active" id="step-auth">
+      <div class="step-title"><span class="badge">1</span> Sign up / log in</div>
+      <div class="row">
+        <input id="email" type="email" placeholder="you@example.com" value="demo@example.com">
+        <input id="password" type="password" placeholder="password" value="secret123">
+      </div>
+      <div class="row">
+        <button onclick="signup()">Sign Up</button>
+        <button class="secondary" onclick="login()">Log In</button>
+      </div>
+      <div class="result" id="auth-result"></div>
+    </div>
+
+    <div class="step" id="step-billing">
+      <div class="step-title"><span class="badge">2</span> Subscription status</div>
+      <div class="row"><button onclick="refreshBilling()">Refresh status</button>
+      <button class="secondary" onclick="upgrade()">Upgrade to Pro</button></div>
+      <div class="result" id="billing-result"></div>
+    </div>
+
+    <div class="step" id="step-resume">
+      <div class="step-title"><span class="badge">3</span> Upload master resume</div>
+      <div class="row">
+        <input id="resume-file" type="file" accept=".md,.txt,.pdf,.docx">
+        <button onclick="uploadResume()">Upload &amp; Parse</button>
+      </div>
+      <div class="result" id="resume-result"></div>
+    </div>
+
+    <div class="step" id="step-job">
+      <div class="step-title"><span class="badge">4</span> Add a job posting</div>
+      <div class="row">
+        <input id="job-url" type="text" value="https://boards.greenhouse.io/stripe/jobs/8172508">
+        <button onclick="addJob()">Fetch &amp; Add</button>
+      </div>
+      <div class="result" id="job-result"></div>
+    </div>
+
+    <div class="step" id="step-tailor">
+      <div class="step-title"><span class="badge">5</span> Tailor resume to a job</div>
+      <div class="row">
+        <select id="job-select"></select>
+        <button onclick="tailorResume()">Tailor</button>
+      </div>
+      <div class="result" id="tailor-result"></div>
+    </div>
+
+  </div>
+
+  <div class="log" id="log"></div>
+
+<script>
+const API = ""; // same-origin
+let token = null;
+const jobs = [];
+
+function log(line) {
+  const el = document.getElementById("log");
+  const div = document.createElement("div");
+  div.textContent = line;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function api(method, path, body, auth = true) {
+  const headers = {};
+  let opts = { method, headers };
+  if (body instanceof FormData) {
+    opts.body = body;
+  } else if (body) {
+    headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  if (auth && token) headers["Authorization"] = "Bearer " + token;
+  log(`--> ${method} ${path}`);
+  const resp = await fetch(API + path, opts);
+  const text = await resp.text();
+  let data;
+  try { data = JSON.parse(text); } catch { data = text; }
+  log(`<-- ${resp.status} ${path}`);
+  if (!resp.ok) throw { status: resp.status, data };
+  return data;
+}
+
+function setStepState(id, state) {
+  const el = document.getElementById(id);
+  el.classList.remove("active", "done");
+  el.classList.add(state);
+}
+
+function showResult(id, html, ok = true) {
+  document.getElementById(id).innerHTML = `<span class="${ok ? 'msg-ok' : 'msg-err'}">${html}</span>`;
+}
+
+async function signup() {
+  await authCall("/auth/signup");
+}
+async function login() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  try {
+    const form = new URLSearchParams();
+    form.set("username", email);
+    form.set("password", password);
+    log("--> POST /auth/login");
+    const resp = await fetch("/auth/login", { method: "POST", body: form });
+    const data = await resp.json();
+    log(`<-- ${resp.status} /auth/login`);
+    if (!resp.ok) throw { status: resp.status, data };
+    onAuthed(data);
+  } catch (e) {
+    showResult("auth-result", "Login failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+async function authCall(path) {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+  try {
+    const data = await api("POST", path, { email, password }, false);
+    onAuthed(data);
+  } catch (e) {
+    showResult("auth-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+function onAuthed(data) {
+  token = data.access_token;
+  showResult("auth-result", "Authenticated. Token acquired.");
+  setStepState("step-auth", "done");
+  setStepState("step-billing", "active");
+  refreshBilling();
+}
+
+async function refreshBilling() {
+  try {
+    const status = await api("GET", "/billing/status");
+    showResult("billing-result",
+      `Tier: <b>${status.tier}</b> — usage ${status.usage_count}/${status.monthly_limit} — auto-submit: ${status.auto_submit_enabled}`);
+    setStepState("step-billing", "done");
+    setStepState("step-resume", "active");
+  } catch (e) {
+    showResult("billing-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function upgrade() {
+  try {
+    const { checkout_url } = await api("POST", "/billing/checkout-session");
+    window.open(checkout_url, "_blank");
+  } catch (e) {
+    showResult("billing-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function uploadResume() {
+  const fileInput = document.getElementById("resume-file");
+  if (!fileInput.files.length) {
+    showResult("resume-result", "Choose a file first.", false);
+    return;
+  }
+  const form = new FormData();
+  form.append("file", fileInput.files[0]);
+  try {
+    const data = await api("POST", "/resumes", form);
+    const b = data.content.basics;
+    showResult("resume-result",
+      `Parsed: <b>${b.name}</b> (${b.email}) — ${data.content.work.length} work entries<br><pre>${JSON.stringify(data.content, null, 2)}</pre>`);
+    setStepState("step-resume", "done");
+    setStepState("step-job", "active");
+  } catch (e) {
+    showResult("resume-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function addJob() {
+  const url = document.getElementById("job-url").value;
+  try {
+    const data = await api("POST", "/jobs", { url });
+    jobs.push(data);
+    const select = document.getElementById("job-select");
+    const opt = document.createElement("option");
+    opt.value = data.id;
+    opt.textContent = `${data.title} @ ${data.company}`;
+    select.appendChild(opt);
+    showResult("job-result", `Added: <b>${data.title}</b> at ${data.company}`);
+    setStepState("step-job", "done");
+    setStepState("step-tailor", "active");
+  } catch (e) {
+    showResult("job-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function tailorResume() {
+  const jobId = document.getElementById("job-select").value;
+  if (!jobId) {
+    showResult("tailor-result", "Add a job first.", false);
+    return;
+  }
+  try {
+    const data = await api("POST", "/tailoring", { job_posting_id: jobId });
+    let html = `<b>Cover letter:</b><pre>${data.cover_letter}</pre><b>Diff:</b>`;
+    if (data.diff.basics) {
+      for (const [field, change] of Object.entries(data.diff.basics)) {
+        html += `<div class="diff-item"><div class="diff-before">${field}: ${change.before}</div><div class="diff-after">${field}: ${change.after}</div></div>`;
+      }
+    }
+    for (const w of data.diff.work || []) {
+      html += `<div class="diff-item"><b>${w.company} — ${w.position}</b>`;
+      html += `<div class="diff-before">${w.highlights_before.join("<br>")}</div>`;
+      html += `<div class="diff-after">${w.highlights_after.join("<br>")}</div></div>`;
+    }
+    if (!data.diff.basics && !(data.diff.work || []).length) {
+      html += "<div>(no changes detected)</div>";
+    }
+    showResult("tailor-result", html);
+    setStepState("step-tailor", "done");
+  } catch (e) {
+    showResult("tailor-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+</script>
+</body>
+</html>
