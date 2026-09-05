@@ -107,6 +107,7 @@ def _handle_subscription_deleted(subscription: dict, db: Session) -> None:
         return
     user.subscription_tier = "free"
     user.subscription_status = "canceled"
+    user.current_period_end = None
     db.add(user)
     db.commit()
 
