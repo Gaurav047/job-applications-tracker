@@ -4,7 +4,7 @@ import anthropic
 
 from app.core.config import settings
 
-MODEL = "claude-sonnet-4-5-20250929"
+MODEL = "claude-opus-5"
 
 
 @lru_cache
