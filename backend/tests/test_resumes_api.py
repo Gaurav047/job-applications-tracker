@@ -47,3 +47,40 @@ def test_upload_rejects_unsupported_file_type(client, tmp_path, monkeypatch):
         headers=headers,
     )
     assert resp.status_code == 400
+
+
+def test_upload_rejected_file_does_not_consume_quota(client, tmp_path, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.resume_storage_dir", str(tmp_path))
+    token = _signup_and_token(client, email="badfile-quota@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/resumes",
+        files={"file": ("resume.exe", io.BytesIO(b"binary"), "application/octet-stream")},
+        headers=headers,
+    )
+    resp = client.get("/billing/status", headers=headers)
+    assert resp.json()["usage_count"] == 0
+
+
+def test_upload_blocked_once_free_tier_limit_reached(client, tmp_path, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.resume_storage_dir", str(tmp_path))
+    token = _signup_and_token(client, email="over-limit@example.com")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    fake_client = FakeAnthropicClient({"basics": {"name": "Jane Doe"}})
+    with patch("app.resume_parser.parse.get_anthropic_client", return_value=fake_client):
+        for _ in range(5):  # free tier monthly_limit == 5
+            resp = client.post(
+                "/resumes",
+                files={"file": ("resume.md", io.BytesIO(b"# Jane Doe"), "text/markdown")},
+                headers=headers,
+            )
+            assert resp.status_code == 201
+
+        resp = client.post(
+            "/resumes",
+            files={"file": ("resume.md", io.BytesIO(b"# Jane Doe"), "text/markdown")},
+            headers=headers,
+        )
+    assert resp.status_code == 402

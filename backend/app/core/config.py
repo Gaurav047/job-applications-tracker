@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     resume_storage_dir: str = "./storage/resumes"
     rendered_pdf_dir: str = "./storage/rendered"
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_pro_price_id: str = ""
+    checkout_success_url: str = "http://localhost:8000/billing/success"
+    checkout_cancel_url: str = "http://localhost:8000/billing/cancel"
 
 
 settings = Settings()

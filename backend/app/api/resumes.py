@@ -6,6 +6,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.billing.usage import enforce_usage_limit
 from app.core.config import settings
 from app.core.db import get_db
 from app.models.resume import MasterResume
@@ -26,6 +27,11 @@ def upload_master_resume(
     suffix = Path(file.filename).suffix.lower()
     if suffix not in ALLOWED_SUFFIXES:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unsupported file type: {suffix}")
+
+    # Metered here, right before the billed (Claude-calling) step, rather than as a
+    # route-level Depends — a Depends runs before this validation and would burn a
+    # quota unit even on a request that gets rejected before ever calling Claude.
+    enforce_usage_limit(db=db, user=user)
 
     storage_dir = Path(settings.resume_storage_dir) / user.id
     storage_dir.mkdir(parents=True, exist_ok=True)
