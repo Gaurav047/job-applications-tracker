@@ -1,8 +1,12 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ENV_FILE = Path(__file__).resolve().parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=ENV_FILE)
 
     database_url: str = "postgresql+psycopg2://localhost/job_apply_assistant"
     jwt_secret: str = "dev-secret-change-me"
@@ -16,6 +20,8 @@ class Settings(BaseSettings):
     stripe_pro_price_id: str = ""
     checkout_success_url: str = "http://localhost:8000/billing/success"
     checkout_cancel_url: str = "http://localhost:8000/billing/cancel"
+    voyage_api_key: str = ""
+    rag_fake_embeddings: bool = False
 
 
 settings = Settings()
