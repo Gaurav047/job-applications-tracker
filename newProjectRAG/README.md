@@ -57,6 +57,12 @@ tests/
    from https://dash.voyageai.com. Without it, set `RAG_FAKE_EMBEDDINGS=1` to use a deterministic
    offline fallback — good enough to develop against, not for real retrieval quality.
 
+   Without a payment method on file, Voyage caps new accounts at **3 requests/minute and 10K
+   tokens/minute** — each ingest/retrieval call is one request, so this is easy to hit while
+   testing (e.g. bulk-ingesting `data/job_examples.sample.jsonl`, or a couple of tailoring calls
+   in quick succession). Add a payment method at https://dashboard.voyageai.com/ to raise it —
+   the free monthly token grant still applies either way.
+
 4. **(Optional) seed some job market examples**:
    ```bash
    cd ../newProjectRAG

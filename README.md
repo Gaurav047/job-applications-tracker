@@ -53,7 +53,8 @@ yet.
    - `VOYAGE_API_KEY` — only needed for `POST /tailoring` with `"use_rag": true` (see
      `../newProjectRAG`), which retrieves relevant resume bullets and job-posting phrasing before
      tailoring. From https://dash.voyageai.com. Without it, set `RAG_FAKE_EMBEDDINGS=1` to use a
-     deterministic offline fallback instead.
+     deterministic offline fallback instead. Without a payment method on the Voyage account,
+     expect a 3 requests/minute cap — see `newProjectRAG/README.md` for details.
 
 ## Running the app
 
