@@ -21,3 +21,8 @@ redis==5.0.8
 playwright==1.47.0
 pytest==8.3.3
 pytest-asyncio==0.24.0
+
+# RAG-tailored resume generation (../newProjectRAG) — editable install so
+# `import rag` works from this venv; its own deps (voyageai, pgvector) come
+# along via its pyproject.toml.
+-e ../newProjectRAG

@@ -50,6 +50,10 @@ yet.
    - `STRIPE_WEBHOOK_SECRET` — only resolves once you run `stripe listen` (see below); leave
      blank until then.
    - `JWT_SECRET` — any random string for signing auth tokens.
+   - `VOYAGE_API_KEY` — only needed for `POST /tailoring` with `"use_rag": true` (see
+     `../newProjectRAG`), which retrieves relevant resume bullets and job-posting phrasing before
+     tailoring. From https://dash.voyageai.com. Without it, set `RAG_FAKE_EMBEDDINGS=1` to use a
+     deterministic offline fallback instead.
 
 ## Running the app
 

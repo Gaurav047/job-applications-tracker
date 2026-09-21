@@ -88,6 +88,22 @@ def test_create_and_fetch_tailored_resume(client, tmp_path, monkeypatch):
     assert get_resp.json()["id"] == tailored_id
 
 
+def test_create_tailored_resume_with_rag(client, tmp_path, monkeypatch):
+    headers = _signup_and_headers(client, email="rag-user@example.com")
+    _upload_master_resume(client, headers, tmp_path, monkeypatch)
+    job_id = _add_job(client, headers)
+
+    with patch("app.api.tailoring.tailor_resume_rag", return_value=_fake_tailoring_result()) as mock_rag, \
+        patch("app.api.tailoring.tailor_resume") as mock_plain:
+        resp = client.post(
+            "/tailoring", json={"job_posting_id": job_id, "use_rag": True}, headers=headers
+        )
+    assert resp.status_code == 201
+    assert resp.json()["content"]["basics"]["summary"] == "Tailored summary"
+    mock_rag.assert_called_once()
+    mock_plain.assert_not_called()
+
+
 def test_tailored_resume_not_visible_to_other_users(client, tmp_path, monkeypatch):
     headers_a = _signup_and_headers(client, email="user-a@example.com")
     _upload_master_resume(client, headers_a, tmp_path, monkeypatch)

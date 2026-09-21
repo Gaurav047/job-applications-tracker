@@ -13,12 +13,14 @@ from app.resume_parser.schema import JsonResume
 from app.tailoring.diff import diff_resumes
 from app.tailoring.tailor import tailor_resume
 from app.tailoring.validate import FabricationError
+from rag.tailor_rag import tailor_resume_rag
 
 router = APIRouter(prefix="/tailoring", tags=["tailoring"])
 
 
 class CreateTailoringRequest(BaseModel):
     job_posting_id: str
+    use_rag: bool = False
 
 
 def _latest_master_resume(user: User, db: Session) -> MasterResume:
@@ -50,7 +52,10 @@ def create_tailored_resume(
 
     master = JsonResume.model_validate(master_resume.content)
     try:
-        result = tailor_resume(master, job.description_text or "")
+        if payload.use_rag:
+            result = tailor_resume_rag(db, master, master_resume.id, job.description_text or "")
+        else:
+            result = tailor_resume(master, job.description_text or "")
     except FabricationError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Tailoring failed validation: {exc}")
 

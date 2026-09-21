@@ -7,12 +7,16 @@ from fastapi.staticfiles import StaticFiles
 from app.api import auth, billing, jobs, resumes, tailoring
 from app.core.db import Base, engine
 from app import models  # noqa: F401  ensures models are registered before create_all
+from rag import models as rag_models  # noqa: F401  registers the RAG tables on Base
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.exec_driver_sql("CREATE EXTENSION IF NOT EXISTS vector")
     Base.metadata.create_all(bind=engine)
     yield
 

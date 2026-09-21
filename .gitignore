@@ -12,3 +12,8 @@ client/.dart_tool/
 client/.flutter-plugins
 client/.flutter-plugins-dependencies
 client/.packages
+
+newProjectRAG/__pycache__/
+newProjectRAG/**/__pycache__/
+newProjectRAG/.pytest_cache/
+newProjectRAG/*.egg-info/
