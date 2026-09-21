@@ -104,6 +104,26 @@ def test_create_tailored_resume_with_rag(client, tmp_path, monkeypatch):
     mock_plain.assert_not_called()
 
 
+def test_download_tailored_resume_pdf(client, tmp_path, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.rendered_pdf_dir", str(tmp_path / "rendered"))
+    headers = _signup_and_headers(client, email="pdf-download@example.com")
+    _upload_master_resume(client, headers, tmp_path, monkeypatch)
+    job_id = _add_job(client, headers)
+
+    with patch("app.api.tailoring.tailor_resume", return_value=_fake_tailoring_result()):
+        resp = client.post("/tailoring", json={"job_posting_id": job_id}, headers=headers)
+    tailored_id = resp.json()["id"]
+    assert resp.json()["has_pdf"] is False
+
+    pdf_resp = client.get(f"/tailoring/{tailored_id}/pdf", headers=headers)
+    assert pdf_resp.status_code == 200
+    assert pdf_resp.headers["content-type"] == "application/pdf"
+    assert pdf_resp.content[:4] == b"%PDF"
+
+    get_resp = client.get(f"/tailoring/{tailored_id}", headers=headers)
+    assert get_resp.json()["has_pdf"] is True
+
+
 def test_tailored_resume_not_visible_to_other_users(client, tmp_path, monkeypatch):
     headers_a = _signup_and_headers(client, email="user-a@example.com")
     _upload_master_resume(client, headers_a, tmp_path, monkeypatch)
@@ -115,6 +135,41 @@ def test_tailored_resume_not_visible_to_other_users(client, tmp_path, monkeypatc
     headers_b = _signup_and_headers(client, email="user-b@example.com")
     get_resp = client.get(f"/tailoring/{tailored_id}", headers=headers_b)
     assert get_resp.status_code == 404
+
+
+def test_fit_score_calls_jev_and_does_not_count_against_quota(client, tmp_path, monkeypatch):
+    headers = _signup_and_headers(client, email="fit-score@example.com")
+    _upload_master_resume(client, headers, tmp_path, monkeypatch)  # already used 1 unit
+    job_id = _add_job(client, headers)
+
+    fake_answers = {
+        "fit": {
+            "type": "score",
+            "score": 3.09,
+            "confidence": 0.82,
+            "legend": {"0": "poor", "1": "weak", "2": "moderate", "3": "strong", "4": "excellent"},
+            "probabilities": {"0": 0.0, "1": 0.0, "2": 0.07, "3": 0.76, "4": 0.17},
+        }
+    }
+    with patch("app.tailoring.fit_score.system_one", return_value=fake_answers) as mock_jev:
+        resp = client.get(f"/tailoring/fit-score?job_posting_id={job_id}", headers=headers)
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "fit": "strong",
+        "confidence": 0.82,
+        "probabilities": {"0": 0.0, "1": 0.0, "2": 0.07, "3": 0.76, "4": 0.17},
+    }
+    mock_jev.assert_called_once()
+
+    status_resp = client.get("/billing/status", headers=headers)
+    assert status_resp.json()["usage_count"] == 1
+
+
+def test_fit_score_requires_valid_job(client, tmp_path, monkeypatch):
+    headers = _signup_and_headers(client, email="fit-score-no-job@example.com")
+    _upload_master_resume(client, headers, tmp_path, monkeypatch)
+    resp = client.get("/tailoring/fit-score?job_posting_id=does-not-exist", headers=headers)
+    assert resp.status_code == 404
 
 
 def test_tailoring_counts_against_usage_quota(client, tmp_path, monkeypatch):

@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import String, DateTime, ForeignKey, Enum
+from sqlalchemy import String, DateTime, ForeignKey, Enum, JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -27,5 +27,7 @@ class Application(Base):
         Enum(ApplicationStatus), nullable=False, default=ApplicationStatus.drafted
     )
     submission_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="manual")  # "auto" | "manual"
+    screenshot_path: Mapped[str] = mapped_column(String(1024), nullable=True)
+    fields: Mapped[dict] = mapped_column(JSON, nullable=True)  # list[FieldResult] as dicts, from Phase 1 fill
     submitted_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

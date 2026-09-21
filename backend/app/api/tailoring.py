@@ -1,9 +1,14 @@
+from pathlib import Path
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.billing.usage import enforce_usage_limit
+from app.core.config import settings
 from app.core.db import get_db
 from app.models.job import JobPosting
 from app.models.resume import MasterResume
@@ -11,6 +16,8 @@ from app.models.tailored_resume import TailoredResume
 from app.models.user import User
 from app.resume_parser.schema import JsonResume
 from app.tailoring.diff import diff_resumes
+from app.tailoring.fit_score import score_resume_fit
+from app.tailoring.render_pdf import render_tailored_resume_pdf
 from app.tailoring.tailor import tailor_resume
 from app.tailoring.validate import FabricationError
 from rag.tailor_rag import tailor_resume_rag
@@ -74,6 +81,26 @@ def create_tailored_resume(
     return _serialize(tailored)
 
 
+@router.get("/fit-score")
+def get_fit_score(
+    job_posting_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Cheap, unmetered fit rating (via Jev) to show before a user spends a
+    tailoring run on this job posting."""
+    master_resume = _latest_master_resume(user, db)
+    job = db.get(JobPosting, job_posting_id)
+    if not job:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Job posting not found")
+
+    master = JsonResume.model_validate(master_resume.content)
+    try:
+        return score_resume_fit(master, job.description_text or "")
+    except httpx.HTTPError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Fit scoring failed: {exc}")
+
+
 @router.get("")
 def list_tailored_resumes(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     rows = (
@@ -97,6 +124,32 @@ def list_tailored_resumes(db: Session = Depends(get_db), user: User = Depends(ge
 def get_tailored_resume(
     tailored_resume_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
+    tailored = _get_owned_tailored_resume(tailored_resume_id, db, user)
+    return _serialize(tailored)
+
+
+@router.get("/{tailored_resume_id}/pdf")
+def download_tailored_resume_pdf(
+    tailored_resume_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    tailored = _get_owned_tailored_resume(tailored_resume_id, db, user)
+
+    if not tailored.rendered_pdf_path or not Path(tailored.rendered_pdf_path).exists():
+        dest = Path(settings.rendered_pdf_dir) / user.id / f"{tailored.id}.pdf"
+        resume = JsonResume.model_validate(tailored.content)
+        render_tailored_resume_pdf(resume, tailored.cover_letter or "", str(dest))
+        tailored.rendered_pdf_path = str(dest)
+        db.add(tailored)
+        db.commit()
+
+    return FileResponse(
+        tailored.rendered_pdf_path,
+        media_type="application/pdf",
+        filename=f"resume-{tailored.id}.pdf",
+    )
+
+
+def _get_owned_tailored_resume(tailored_resume_id: str, db: Session, user: User) -> TailoredResume:
     tailored = (
         db.query(TailoredResume)
         .join(MasterResume, TailoredResume.master_resume_id == MasterResume.id)
@@ -105,7 +158,7 @@ def get_tailored_resume(
     )
     if not tailored:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tailored resume not found")
-    return _serialize(tailored)
+    return tailored
 
 
 def _serialize(tailored: TailoredResume) -> dict:
@@ -115,5 +168,6 @@ def _serialize(tailored: TailoredResume) -> dict:
         "content": tailored.content,
         "cover_letter": tailored.cover_letter,
         "diff": tailored.diff,
+        "has_pdf": bool(tailored.rendered_pdf_path),
         "created_at": tailored.created_at,
     }

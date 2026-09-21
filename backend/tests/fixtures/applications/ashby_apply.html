@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<body>
+<form>
+  <label for="name">Full Name</label>
+  <input type="text" id="name">
+  <label for="email">Email</label>
+  <input type="email" id="email">
+  <label for="phone">Phone</label>
+  <input type="text" id="phone">
+  <label for="resume-upload">Resume</label>
+  <input type="file" id="resume-upload">
+  <label for="cover-letter">Cover Letter</label>
+  <textarea id="cover-letter"></textarea>
+  <button type="button" onclick="document.getElementById('submitted').style.display='block'">Submit Application</button>
+</form>
+<div id="submitted" style="display:none">Submitted!</div>
+</body>
+</html>

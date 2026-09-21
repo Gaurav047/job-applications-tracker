@@ -13,8 +13,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24
     anthropic_api_key: str = ""
+    typesafe_api_key: str = ""
     resume_storage_dir: str = "./storage/resumes"
     rendered_pdf_dir: str = "./storage/rendered"
+    screenshot_dir: str = "./storage/screenshots"
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_pro_price_id: str = ""

@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<body>
+<!-- Missing phone, resume upload, and cover letter fields — mimics a
+     company's customized form that dropped the "optional" fields, to
+     prove the driver degrades gracefully instead of crashing. -->
+<form id="application_form">
+  <label for="first_name">First Name</label>
+  <input type="text" id="first_name" name="first_name">
+  <label for="last_name">Last Name</label>
+  <input type="text" id="last_name" name="last_name">
+  <label for="email">Email</label>
+  <input type="email" id="email" name="email">
+  <button id="submit_app" type="button" onclick="document.getElementById('submitted').style.display='block'">Submit Application</button>
+</form>
+<div id="submitted" style="display:none">Submitted!</div>
+</body>
+</html>

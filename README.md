@@ -55,6 +55,11 @@ yet.
      tailoring. From https://dash.voyageai.com. Without it, set `RAG_FAKE_EMBEDDINGS=1` to use a
      deterministic offline fallback instead. Without a payment method on the Voyage account,
      expect a 3 requests/minute cap — see `newProjectRAG/README.md` for details.
+   - `TYPESAFE_API_KEY` — only needed for `GET /tailoring/fit-score`, which uses TypeSafe's Jev
+     model to give a fast, free fit rating (poor/weak/moderate/strong/excellent) between a
+     candidate's resume and a job posting before they spend a full (billed) tailoring run on it.
+     From https://dash.typesafe.ai. Called directly over HTTP rather than via the `typesafe-sdk`
+     package, since that package requires Python >= 3.10 and this backend targets 3.9.
 
 ## Running the app
 

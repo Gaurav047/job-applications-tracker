@@ -110,6 +110,18 @@
       <div class="result" id="tailor-result"></div>
     </div>
 
+    <div class="step" id="step-apply">
+      <div class="step-title"><span class="badge">6</span> Apply</div>
+      <div class="row">
+        <button onclick="prepareApplication()">Prepare Application</button>
+      </div>
+      <div class="row" id="apply-actions" hidden>
+        <button onclick="confirmApplication()">Confirm Submit</button>
+        <button class="secondary" onclick="rejectApplication()">Cancel</button>
+      </div>
+      <div class="result" id="apply-result"></div>
+    </div>
+
   </div>
 
   <div class="log" id="log"></div>
@@ -118,6 +130,25 @@
 const API = ""; // same-origin
 let token = null;
 const jobs = [];
+let lastTailoredId = null;
+let lastApplicationId = null;
+
+async function authedFetch(path) {
+  const resp = await fetch(API + path, { headers: token ? { Authorization: "Bearer " + token } : {} });
+  if (!resp.ok) throw { status: resp.status, data: await resp.text() };
+  return resp;
+}
+
+async function downloadBlob(path, filename) {
+  const resp = await authedFetch(path);
+  const blob = await resp.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function log(line) {
   const el = document.getElementById("log");
@@ -262,7 +293,8 @@ async function tailorResume() {
   }
   try {
     const data = await api("POST", "/tailoring", { job_posting_id: jobId });
-    let html = `<b>Cover letter:</b><pre>${data.cover_letter}</pre><b>Diff:</b>`;
+    lastTailoredId = data.id;
+    let html = `<div class="row"><button onclick="downloadPdf()">Download PDF</button></div><b>Cover letter:</b><pre>${data.cover_letter}</pre><b>Diff:</b>`;
     if (data.diff.basics) {
       for (const [field, change] of Object.entries(data.diff.basics)) {
         html += `<div class="diff-item"><div class="diff-before">${field}: ${change.before}</div><div class="diff-after">${field}: ${change.after}</div></div>`;
@@ -278,8 +310,84 @@ async function tailorResume() {
     }
     showResult("tailor-result", html);
     setStepState("step-tailor", "done");
+    setStepState("step-apply", "active");
   } catch (e) {
     showResult("tailor-result", "Failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function downloadPdf() {
+  if (!lastTailoredId) return;
+  try {
+    await downloadBlob(`/tailoring/${lastTailoredId}/pdf`, `resume-${lastTailoredId}.pdf`);
+  } catch (e) {
+    showResult("tailor-result", "PDF download failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function prepareApplication() {
+  if (!lastTailoredId) {
+    showResult("apply-result", "Tailor a resume first.", false);
+    return;
+  }
+  try {
+    const data = await api("POST", "/applications", { tailored_resume_id: lastTailoredId });
+    lastApplicationId = data.id;
+    await renderApplicationReview(data);
+    document.getElementById("apply-actions").hidden = false;
+  } catch (e) {
+    if (e.status === 403) {
+      showResult("apply-result",
+        "Auto-apply requires a Pro subscription. <button class=\"secondary\" onclick=\"upgrade()\">Upgrade</button>", false);
+    } else {
+      showResult("apply-result", "Failed: " + JSON.stringify(e.data || e), false);
+    }
+  }
+}
+
+async function renderApplicationReview(data) {
+  let html = `Status: <b>${data.status}</b><br>`;
+  for (const f of data.fields || []) {
+    const cls = f.status === "filled" ? "diff-after" : "diff-before";
+    html += `<div class="diff-item"><span class="${cls}">${f.field}: ${f.status}</span> <span style="color:#888">${f.detail || ""}</span></div>`;
+  }
+  showResult("apply-result", html);
+  if (data.has_screenshot) {
+    try {
+      const resp = await authedFetch(`/applications/${data.id}/screenshot`);
+      const blob = await resp.blob();
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(blob);
+      img.style.maxWidth = "100%";
+      img.style.marginTop = "8px";
+      img.style.border = "1px solid var(--border)";
+      document.getElementById("apply-result").appendChild(img);
+    } catch (e) {
+      // Screenshot is a nice-to-have for review — don't fail the whole step over it.
+    }
+  }
+}
+
+async function confirmApplication() {
+  if (!lastApplicationId) return;
+  try {
+    const data = await api("POST", `/applications/${lastApplicationId}/confirm`);
+    showResult("apply-result", `Status: <b>${data.status}</b> — submitted at ${data.submitted_at}`);
+    document.getElementById("apply-actions").hidden = true;
+    setStepState("step-apply", "done");
+  } catch (e) {
+    showResult("apply-result", "Confirm failed: " + JSON.stringify(e.data || e), false);
+  }
+}
+
+async function rejectApplication() {
+  if (!lastApplicationId) return;
+  try {
+    const data = await api("POST", `/applications/${lastApplicationId}/reject`);
+    showResult("apply-result", `Status: <b>${data.status}</b>`, false);
+    document.getElementById("apply-actions").hidden = true;
+  } catch (e) {
+    showResult("apply-result", "Cancel failed: " + JSON.stringify(e.data || e), false);
   }
 }
 </script>
