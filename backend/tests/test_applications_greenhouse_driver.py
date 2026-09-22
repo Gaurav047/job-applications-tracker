@@ -70,6 +70,33 @@ def test_fill_degrades_gracefully_on_missing_fields(page, tmp_path):
     assert _by_field(result.fields, "cover_letter").status == FieldStatus.not_found
 
 
+def test_fill_fails_clearly_when_redirected_off_greenhouse_over_http():
+    # Regression test: a real posting (Stripe) redirects boards.greenhouse.io
+    # to a fully custom career page on the company's own domain instead of
+    # rendering Greenhouse's hosted template. Every selector would
+    # legitimately be "not found" there, but that would look like a broken
+    # driver rather than an unsupported page — fill() should refuse clearly
+    # instead. The file:// fixture tests above confirm this guard does NOT
+    # fire for local test navigation (a non-http(s) scheme).
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        page = browser.new_page()
+        page.route(
+            "http://example.com/custom-career-page",
+            lambda route: route.fulfill(status=200, body="<html><body>Custom career site</body></html>"),
+        )
+        page.goto("http://example.com/custom-career-page")
+
+        driver = GreenhouseApplyDriver()
+        result = driver.fill(page, _resume(), "Dear Hiring Team,", "/tmp/resume.pdf")
+
+        assert result.ok is False
+        assert "custom company career site" in result.error
+        browser.close()
+
+
 def test_submit_clicks_the_real_button(page):
     page.goto(f"file://{FIXTURES / 'greenhouse_apply.html'}")
     driver = GreenhouseApplyDriver()
